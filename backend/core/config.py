@@ -1,4 +1,3 @@
-# backend/core/config.py
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,9 +15,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ✔ Default rỗng để mypy không báo missing arg,
-    #   nhưng sẽ bị chặn bởi validator nếu không được set qua env/.env
-    DATABASE_URL: str = Field("", description="SQLAlchemy URL for PostgreSQL")
+    # Cho phép None để mypy không yêu cầu arg khi gọi Settings()
+    DATABASE_URL: str | None = Field(default=None, description="SQLAlchemy URL for PostgreSQL")
     API_KEYS: str = "dev-key-1,dev-key-2"
     SECRET_KEY: str = "change-me"
     RATE_LIMIT_PER_MIN: int = 3000
@@ -27,7 +25,7 @@ class Settings(BaseSettings):
 
     @field_validator("DATABASE_URL")
     @classmethod
-    def _require_db_url(cls, v: str) -> str:
+    def _require_db_url(cls, v: str | None) -> str:
         if not v:
             raise ValueError("DATABASE_URL is required. Set it via environment or .env")
         return v
