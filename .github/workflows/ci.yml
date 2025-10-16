@@ -25,6 +25,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg2://mini_siem:mini_siem@localhost:5432/mini_siem
       API_KEYS: dev-key-1,dev-key-2
       LOG_LEVEL: INFO
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - uses: actions/checkout@v4
