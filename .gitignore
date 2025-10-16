@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.env.*
+*.log
+
+# Tools & caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS & editor
+.DS_Store
+.idea/
+.vscode/
+
+# DB & local data
+*.sqlite
+*.db
+
+# Node (nếu có dashboard React sau này)
+node_modules/
+dist/

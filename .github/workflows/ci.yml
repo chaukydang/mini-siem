@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mini_siem
+          POSTGRES_PASSWORD: mini_siem
+          POSTGRES_DB: mini_siem
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U mini_siem"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql+psycopg2://mini_siem:mini_siem@localhost:5432/mini_siem
+      API_KEYS: dev-key-1,dev-key-2
+      LOG_LEVEL: INFO
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Migrate DB
+        run: python -m scripts.migrate_db
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Type check (mypy)
+        run: mypy backend
+      - name: Tests
+        run: pytest -q
