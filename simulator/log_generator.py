@@ -32,18 +32,21 @@ def _rand_session() -> str:
     return "".join(random.choices(string.ascii_letters + string.digits, k=16))
 
 
-def build_event(mode: str) -> Dict:
+def build_event(mode: str, *, attackers: List[str] | None = None) -> Dict:
     now = datetime.now(timezone.utc).isoformat()
     endpoint, method = random.choice(ENDPOINTS)
     status = 200
     action = "view" if method == "GET" else "action"
     query = None
+    # IP mặc định random
     ip = _rand_ip()
 
     if mode == "brute":
         endpoint, method = "/login", "POST"
-        status = random.choice([401, 401, 401, 200])
+        status = random.choice([401, 401, 401, 401, 403, 200])
         action = "login"
+        if attackers:
+            ip = random.choice(attackers)
     elif mode == "ddos":
         endpoint, method = "/", "GET"
         status = 200
@@ -90,14 +93,24 @@ def main():
     ap.add_argument("--batch-size", type=int, default=200)
     ap.add_argument("--api-key", required=True)
     ap.add_argument("--url", default="http://localhost:8000/api/ingest")
+    ap.add_argument(
+        "--attackers", type=int, default=3, help="Số IP attacker tái sử dụng ở chế độ brute"
+    )
     args = ap.parse_args()
 
     deadline = time.time() + args.duration
     buf: List[Dict] = []
     interval = 1.0 / max(1, args.eps)
 
+    # Chuẩn bị pool attackers cho brute
+    attackers_pool: List[str] = []
+    if args.mode == "brute":
+        attackers_pool = [_rand_ip() for _ in range(max(1, args.attackers))]
     while time.time() < deadline:
-        ev = build_event(args.mode if random.random() < 0.9 else "normal")
+        ev = build_event(
+            args.mode if random.random() < 0.9 else "normal",
+            attackers=attackers_pool if args.mode == "brute" else None,
+        )
         buf.append(ev)
         if len(buf) >= args.batch_size:
             post_batch(args.url, args.api_key, buf)
