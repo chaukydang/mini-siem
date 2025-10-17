@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Index, Integer, String, Text
+from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -73,3 +73,34 @@ class IngestMetric(Base):
     count_dropped: Mapped[int] = mapped_column(Integer)
     avg_batch_size: Mapped[int] = mapped_column(Integer)
     ingest_latency_p95_ms: Mapped[int] = mapped_column(Integer)
+
+
+class Event(Base):
+    __tablename__ = "events"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    rule_id: Mapped[str] = mapped_column(String(16), index=True)
+    severity: Mapped[int] = mapped_column(Integer)  # 1..5
+    ip: Mapped[str | None] = mapped_column(String(64), index=True, default=None)
+    endpoint: Mapped[str | None] = mapped_column(String(1024), default=None)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    evidence: Mapped[str | None] = mapped_column(Text, default=None)
+    source: Mapped[str] = mapped_column(String(32), default="rules")
+
+
+Index("ix_events_rule_last", Event.rule_id, Event.last_seen)
+
+
+class IPStat(Base):
+    __tablename__ = "ip_stats"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    bucket_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ip: Mapped[str] = mapped_column(String(64), index=True)
+    endpoint: Mapped[str | None] = mapped_column(String(1024), default=None)
+    req_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_4xx: Mapped[int] = mapped_column(Integer, default=0)
+    error_5xx: Mapped[int] = mapped_column(Integer, default=0)
+
+
+UniqueConstraint("bucket_start", "ip", "endpoint", name="uq_ip_stats_bucket_ip_ep")

@@ -1,0 +1,33 @@
+R-001:
+  name: brute_force_login
+  severity: 4
+  window_sec: 300
+  min_failures: 3          # ↓ tạm thời
+  login_endpoint: "/login"
+R-002:
+  name: ddos_light
+  severity: 4
+  window_sec: 60
+  req_per_ip_threshold: 200
+R-003:
+  name: sqli_signature
+  severity: 3
+  window_sec: 300
+  patterns:
+    - "' OR 1=1 --"
+    - "UNION SELECT"
+    - "xp_cmdshell"
+R-004:
+  name: http_5xx_spike
+  severity: 3
+  window_sec: 300
+  error_rate_threshold: 0.15
+R-005:
+  name: admin_probing
+  severity: 2
+  window_sec: 300
+  min_404s: 5
+  sensitive_paths:
+    - "/admin"
+    - "/.git"
+    - "/wp-admin"
