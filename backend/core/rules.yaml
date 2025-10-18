@@ -8,7 +8,8 @@ R-002:
   name: ddos_light
   severity: 4
   window_sec: 60
-  req_per_ip_threshold: 200
+  req_per_ip_threshold: 400   # ngưỡng tối thiểu trong cửa sổ
+  endpoint: null           # nếu muốn chỉ theo dõi 1 endpoint, đặt "/"
 R-003:
   name: sqli_signature
   severity: 3

@@ -32,7 +32,9 @@ def _rand_session() -> str:
     return "".join(random.choices(string.ascii_letters + string.digits, k=16))
 
 
-def build_event(mode: str, *, attackers: List[str] | None = None) -> Dict:
+def build_event(
+    mode: str, *, attackers: List[str] | None = None, ddos_endpoint: str | None = None
+) -> Dict:
     now = datetime.now(timezone.utc).isoformat()
     endpoint, method = random.choice(ENDPOINTS)
     status = 200
@@ -48,9 +50,13 @@ def build_event(mode: str, *, attackers: List[str] | None = None) -> Dict:
         if attackers:
             ip = random.choice(attackers)
     elif mode == "ddos":
-        endpoint, method = "/", "GET"
-        status = 200
+        # DDoS: flooding GET (200 là chủ đạo, đôi khi 429)
+        if ddos_endpoint:
+            endpoint, method = ddos_endpoint, "GET"
+        status = random.choice([200, 200, 200, 200, 429])
         action = "view"
+        if attackers:
+            ip = random.choice(attackers)
     elif mode == "sqli":
         endpoint, method = "/products", "GET"
         status = random.choice([200, 400, 403])
@@ -94,7 +100,10 @@ def main():
     ap.add_argument("--api-key", required=True)
     ap.add_argument("--url", default="http://localhost:8000/api/ingest")
     ap.add_argument(
-        "--attackers", type=int, default=3, help="Số IP attacker tái sử dụng ở chế độ brute"
+        "--attackers", type=int, default=3, help="Số IP attacker tái sử dụng ở chế độ brute/ddos"
+    )
+    ap.add_argument(
+        "--ddos-endpoint", type=str, default="", help="Cố định endpoint cho ddos (vd: /)"
     )
     args = ap.parse_args()
 
@@ -104,12 +113,13 @@ def main():
 
     # Chuẩn bị pool attackers cho brute
     attackers_pool: List[str] = []
-    if args.mode == "brute":
+    if args.mode in ("brute", "ddos"):
         attackers_pool = [_rand_ip() for _ in range(max(1, args.attackers))]
     while time.time() < deadline:
         ev = build_event(
             args.mode if random.random() < 0.9 else "normal",
-            attackers=attackers_pool if args.mode == "brute" else None,
+            attackers=attackers_pool if args.mode in ("brute", "ddos") else None,
+            ddos_endpoint=args.ddos_endpoint or None,
         )
         buf.append(ev)
         if len(buf) >= args.batch_size:
