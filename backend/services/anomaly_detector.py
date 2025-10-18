@@ -91,14 +91,6 @@ class BruteForceRule:
         return matches
 
 
-class DDOSLightRule:
-    rule_id = "R-002"
-
-    def evaluate(self, db: Session, start: datetime, end: datetime) -> list[RuleMatch]:
-        # TODO: Step 2.2
-        return []
-
-
 class SQLiSignatureRule:
     rule_id = "R-003"
 
@@ -163,3 +155,47 @@ class RuleEngine:
             )
             written += 1
         return written
+
+
+class DDOSLightRule:
+    rule_id = "R-002"
+
+    def evaluate(self, db: Session, start: datetime, end: datetime) -> list[RuleMatch]:
+        """Phát hiện IP có số lượng request vượt ngưỡng trong cửa sổ [start, end)."""
+        cfg = rules_config.get(self.rule_id) or {}
+        threshold = int(cfg.get("req_per_ip_threshold", 400))
+        focus_endpoint = cfg.get("endpoint")  # có thể None
+        severity = int(cfg.get("severity", 4))
+
+        q = db.query(
+            Log.ip.label("ip"),
+            func.min(Log.ts).label("first_seen"),
+            func.max(Log.ts).label("last_seen"),
+            func.count(Log.id).label("cnt"),
+        ).filter(Log.ts >= start, Log.ts < end)
+        if focus_endpoint:
+            q = q.filter(Log.endpoint == focus_endpoint)
+
+        q = q.group_by(Log.ip).having(func.count(Log.id) >= threshold)
+
+        matches: list[RuleMatch] = []
+        for row in q.all():
+            ip = row.ip
+            first_seen = row.first_seen
+            last_seen = row.last_seen
+            cnt = int(row.cnt)
+            ep = focus_endpoint or "<any>"
+            evidence = f"{cnt} requests in {(end-start).total_seconds():.0f}s to {ep}"
+            matches.append(
+                RuleMatch(
+                    rule_id=self.rule_id,
+                    severity=severity,
+                    first_seen=first_seen,
+                    last_seen=last_seen,
+                    ip=ip,
+                    endpoint=focus_endpoint,  # None nếu theo dõi all
+                    count=cnt,
+                    evidence=evidence,
+                )
+            )
+        return matches
