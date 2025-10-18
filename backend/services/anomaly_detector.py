@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from backend.core.rules_config import rules_config
@@ -95,8 +95,69 @@ class SQLiSignatureRule:
     rule_id = "R-003"
 
     def evaluate(self, db: Session, start: datetime, end: datetime) -> list[RuleMatch]:
-        # TODO: Step 2.3
-        return []
+        """
+        Dò các dấu hiệu SQLi trong window [start, end):
+          - So khớp pattern (case-insensitive) trên query_params và endpoint
+          - (Optional) chỉ xét các endpoint trong danh sách cấu hình
+          - Gom theo IP; nếu số hit >= min_hits_per_ip thì tạo 1 sự kiện
+        """
+        cfg = rules_config.get(self.rule_id) or {}
+        severity = int(cfg.get("severity", 3))
+        min_hits = int(cfg.get("min_hits_per_ip", 3))
+        endpoints = cfg.get("endpoints") or []
+        patterns: list[str] = list(cfg.get("patterns", []))
+
+        # Không có pattern thì không làm gì
+        if not patterns:
+            return []
+
+        # Xây dựng mệnh đề OR cho pattern (ILIKE)
+        like_clauses = []
+        for p in patterns:
+            # dùng ILIKE cho Postgres (case-insensitive)
+            like = f"%{p}%"
+            like_clauses.append(func.lower(Log.query_params).like(like.lower()))
+            like_clauses.append(func.lower(Log.endpoint).like(like.lower()))
+
+        q = (
+            db.query(
+                Log.ip.label("ip"),
+                func.min(Log.ts).label("first_seen"),
+                func.max(Log.ts).label("last_seen"),
+                func.count(Log.id).label("cnt"),
+            )
+            .filter(Log.ts >= start, Log.ts < end)
+            .filter(or_(*like_clauses))
+        )
+
+        # Nếu có whitelist endpoint, lọc thêm
+        if endpoints:
+            q = q.filter(Log.endpoint.in_(endpoints))
+
+        # Gom theo IP để đưa ra cảnh báo theo nguồn tấn công
+        q = q.group_by(Log.ip).having(func.count(Log.id) >= min_hits)
+
+        matches: list[RuleMatch] = []
+        for row in q.all():
+            ip = row.ip
+            first_seen = row.first_seen
+            last_seen = row.last_seen
+            cnt = int(row.cnt)
+            # evidence tóm tắt: số hit và số pattern được cấu hình
+            evidence = f"{cnt} SQLi-like hits across {len(patterns)} signatures"
+            matches.append(
+                RuleMatch(
+                    rule_id=self.rule_id,
+                    severity=severity,
+                    first_seen=first_seen,
+                    last_seen=last_seen,
+                    ip=ip,
+                    endpoint=None,  # có thể để None vì xét nhiều endpoint
+                    count=cnt,
+                    evidence=evidence,
+                )
+            )
+        return matches
 
 
 class Http5xxSpikeRule:

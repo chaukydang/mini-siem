@@ -14,10 +14,17 @@ R-003:
   name: sqli_signature
   severity: 3
   window_sec: 300
-  patterns:
+  min_hits_per_ip: 3            # số hit chứa signature trong window để kích hoạt
+  endpoints:                     # optional: lọc endpoint theo whitelist; để []/null nếu không lọc
+    - "/search"
+    - "/product"
+  patterns:                      # các mẫu phổ biến; có thể bổ sung dần
     - "' OR 1=1 --"
     - "UNION SELECT"
     - "xp_cmdshell"
+    - "SLEEP("
+    - "benchmark("
+    - "'; DROP TABLE"
 R-004:
   name: http_5xx_spike
   severity: 3
