@@ -57,10 +57,21 @@ def build_event(
         action = "view"
         if attackers:
             ip = random.choice(attackers)
-    elif mode == "sqli":
-        endpoint, method = "/products", "GET"
-        status = random.choice([200, 400, 403])
-        query = random.choice(SUS_QS)
+    if mode == "sqli":
+        # tập hợp chữ ký SQLi cơ bản
+        sqli_sigs = [
+            "' OR 1=1 --",
+            "UNION SELECT username, password FROM users",
+            "SLEEP(2)",
+            "benchmark(1000000,md5(1))",
+            "'; DROP TABLE orders; --",
+        ]
+        endpoint, method = "/search", "GET"
+        query = random.choice(sqli_sigs)
+        status = random.choice([200, 403, 500])  # có thể gây 500 tuỳ app
+        action = "search"
+        if attackers:
+            ip = random.choice(attackers)
 
     return {
         "ts": now,
@@ -113,12 +124,12 @@ def main():
 
     # Chuẩn bị pool attackers cho brute
     attackers_pool: List[str] = []
-    if args.mode in ("brute", "ddos"):
+    if args.mode in ("brute", "ddos", "sqli"):
         attackers_pool = [_rand_ip() for _ in range(max(1, args.attackers))]
     while time.time() < deadline:
         ev = build_event(
             args.mode if random.random() < 0.9 else "normal",
-            attackers=attackers_pool if args.mode in ("brute", "ddos") else None,
+            attackers=attackers_pool if args.mode in ("brute", "ddos", "sqli") else None,
             ddos_endpoint=args.ddos_endpoint or None,
         )
         buf.append(ev)
